@@ -3060,6 +3060,26 @@ class SQLiteDatabaseManager:
     # МЕТОДЫ ДЛЯ РАБОТЫ С ОРГАНИЗАЦИЯМИ (ШАБЛОНЫ ДЕЙСТВИЙ)
     # ========================================================================
 
+    def get_all_organizations(self) -> list:
+        """Получить ВСЕ организации (для обратной совместимости)."""
+        try:
+            conn = self._get_connection()
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM organizations ORDER BY name;")
+            rows = cursor.fetchall()
+            organizations = [dict(row) for row in rows]
+            cursor.close()
+            conn.close()
+            logger.info(f"SQLiteDatabaseManager: Получено {len(organizations)} организаций (все).")
+            return organizations
+        except sqlite3.Error as e:
+            logger.error(f"SQLiteDatabaseManager: Ошибка при получении всех организаций: {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении всех организаций: {e}")
+            return []
+
     def get_organizations_for_action(self, action_id: int) -> list:
         """Получить все организации, привязанные к конкретному действию (шаблону)."""
         try:
@@ -3107,6 +3127,14 @@ class SQLiteDatabaseManager:
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при создании организации для действия ID {action_id}: {e}")
             return 0
+
+    def create_organization(self, org_data: dict) -> int:
+        """Создать организацию (для обратной совместимости). Требует action_id в org_data."""
+        action_id = org_data.get('action_id', 0)
+        if not action_id:
+            logger.error("SQLiteDatabaseManager: create_organization требует action_id в org_data.")
+            return 0
+        return self.create_organization_for_action(action_id, org_data)
 
     def update_organization(self, org_id: int, org_data: dict) -> bool:
         """Обновить данные организации."""

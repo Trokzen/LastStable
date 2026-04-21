@@ -18,6 +18,7 @@ Popup {
     property bool isEditMode: false // <-- Добавьте эту строку, если её нет
     property int currentActionId: -1
     property int currentAlgorithmId: -1
+    property var organizationsList: [] // Список организаций для текущего действия
 
     signal actionSaved()
 
