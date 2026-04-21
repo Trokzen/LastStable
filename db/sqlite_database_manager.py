@@ -3057,37 +3057,38 @@ class SQLiteDatabaseManager:
             return False
 
     # ========================================================================
-    # МЕТОДЫ ДЛЯ РАБОТЫ С ОРГАНИЗАЦИЯМИ
+    # МЕТОДЫ ДЛЯ РАБОТЫ С ОРГАНИЗАЦИЯМИ (ШАБЛОНЫ ДЕЙСТВИЙ)
     # ========================================================================
 
-    def get_all_organizations(self) -> list:
-        """Получить все организации из справочника."""
+    def get_organizations_for_action(self, action_id: int) -> list:
+        """Получить все организации, привязанные к конкретному действию (шаблону)."""
         try:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM organizations ORDER BY name;")
+            cursor.execute("SELECT * FROM organizations WHERE action_id = ? ORDER BY name;", (action_id,))
             rows = cursor.fetchall()
             organizations = [dict(row) for row in rows]
             cursor.close()
             conn.close()
-            logger.info(f"SQLiteDatabaseManager: Получено {len(organizations)} организаций.")
+            logger.info(f"SQLiteDatabaseManager: Получено {len(organizations)} организаций для действия ID {action_id}.")
             return organizations
         except sqlite3.Error as e:
-            logger.error(f"SQLiteDatabaseManager: Ошибка при получении организаций: {e}")
+            logger.error(f"SQLiteDatabaseManager: Ошибка при получении организаций для действия ID {action_id}: {e}")
             return []
         except Exception as e:
-            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении организаций: {e}")
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении организаций для действия ID {action_id}: {e}")
             return []
 
-    def create_organization(self, org_data: dict) -> int:
-        """Создать новую организацию. Возвращает ID новой записи или 0 при ошибке."""
+    def create_organization_for_action(self, action_id: int, org_data: dict) -> int:
+        """Создать новую организацию для конкретного действия. Возвращает ID новой записи или 0 при ошибке."""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO organizations (name, phone, contact_person, notes) VALUES (?, ?, ?, ?);",
+                "INSERT INTO organizations (action_id, name, phone, contact_person, notes) VALUES (?, ?, ?, ?, ?);",
                 (
+                    action_id,
                     org_data.get('name', ''),
                     org_data.get('phone', None),
                     org_data.get('contact_person', None),
@@ -3098,13 +3099,13 @@ class SQLiteDatabaseManager:
             new_id = cursor.lastrowid
             cursor.close()
             conn.close()
-            logger.info(f"SQLiteDatabaseManager: Создана организация с ID {new_id}.")
+            logger.info(f"SQLiteDatabaseManager: Создана организация с ID {new_id} для действия ID {action_id}.")
             return new_id
         except sqlite3.Error as e:
-            logger.error(f"SQLiteDatabaseManager: Ошибка при создании организации: {e}")
+            logger.error(f"SQLiteDatabaseManager: Ошибка при создании организации для действия ID {action_id}: {e}")
             return 0
         except Exception as e:
-            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при создании организации: {e}")
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при создании организации для действия ID {action_id}: {e}")
             return 0
 
     def update_organization(self, org_id: int, org_data: dict) -> bool:
@@ -3174,7 +3175,7 @@ class SQLiteDatabaseManager:
             return None
 
     # ========================================================================
-    # МЕТОДЫ ДЛЯ РАБОТЫ С СПРАВОЧНЫМИ ФАЙЛАМИ ОРГАНИЗАЦИЙ
+    # МЕТОДЫ ДЛЯ РАБОТЫ С СПРАВОЧНЫМИ ФАЙЛАМИ ОРГАНИЗАЦИЙ (ШАБЛОНЫ ДЕЙСТВИЙ)
     # ========================================================================
 
     def get_organization_reference_files(self, org_id: int) -> list:
@@ -3183,7 +3184,7 @@ class SQLiteDatabaseManager:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM organization_reference_files WHERE organization_id = ? ORDER BY file_type, file_path;", (org_id,))
+            cursor.execute("SELECT * FROM organization_files WHERE organization_id = ? ORDER BY file_type, file_path;", (org_id,))
             rows = cursor.fetchall()
             files = [dict(row) for row in rows]
             cursor.close()
@@ -3203,7 +3204,7 @@ class SQLiteDatabaseManager:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM organization_reference_files WHERE id = ?;", (file_id,))
+            cursor.execute("SELECT * FROM organization_files WHERE id = ?;", (file_id,))
             row = cursor.fetchone()
             files = [dict(row)] if row else []
             cursor.close()
@@ -3222,7 +3223,7 @@ class SQLiteDatabaseManager:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO organization_reference_files (organization_id, file_path, file_type) VALUES (?, ?, ?);",
+                "INSERT INTO organization_files (organization_id, file_path, file_type) VALUES (?, ?, ?);",
                 (org_id, file_path, file_type)
             )
             conn.commit()
@@ -3243,7 +3244,7 @@ class SQLiteDatabaseManager:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM organization_reference_files WHERE id = ?;", (file_id,))
+            cursor.execute("DELETE FROM organization_files WHERE id = ?;", (file_id,))
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
@@ -3258,75 +3259,80 @@ class SQLiteDatabaseManager:
             return False
 
     # ========================================================================
-    # МЕТОДЫ ДЛЯ СВЯЗИ ОРГАНИЗАЦИЙ С ДЕЙСТВИЯМИ
+    # МЕТОДЫ ДЛЯ СВЯЗИ ОРГАНИЗАЦИЙ С ДЕЙСТВИЯМИ (ИСПОЛНЕНИЯ)
     # ========================================================================
 
     def get_organizations_for_action_execution(self, action_execution_id: int) -> list:
-        """Получить все организации, привязанные к действию."""
+        """Получить все организации, привязанные к выполнению действия."""
         try:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT o.*
-                FROM organizations o
-                INNER JOIN action_execution_organizations aeo ON o.id = aeo.organization_id
-                WHERE aeo.action_execution_id = ?
-                ORDER BY o.name;
+                SELECT eo.*
+                FROM exec_organizations eo
+                WHERE eo.action_execution_id = ?
+                ORDER BY eo.name;
             """, (action_execution_id,))
             rows = cursor.fetchall()
             organizations = [dict(row) for row in rows]
             cursor.close()
             conn.close()
-            logger.info(f"SQLiteDatabaseManager: Получено {len(organizations)} организаций для действия ID {action_execution_id}.")
+            logger.info(f"SQLiteDatabaseManager: Получено {len(organizations)} организаций для выполнения действия ID {action_execution_id}.")
             return organizations
         except sqlite3.Error as e:
-            logger.error(f"SQLiteDatabaseManager: Ошибка при получении организаций для действия ID {action_execution_id}: {e}")
+            logger.error(f"SQLiteDatabaseManager: Ошибка при получении организаций для выполнения действия ID {action_execution_id}: {e}")
             return []
         except Exception as e:
-            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении организаций для действия ID {action_execution_id}: {e}")
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении организаций для выполнения действия ID {action_execution_id}: {e}")
             return []
 
-    def add_organization_to_action_execution(self, action_execution_id: int, organization_id: int) -> bool:
-        """Привязать организацию к действию."""
+    def add_organization_to_action_execution(self, action_execution_id: int, org_data: dict) -> int:
+        """Создать организацию для выполнения действия. Возвращает ID новой записи или 0 при ошибке."""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO action_execution_organizations (action_execution_id, organization_id) VALUES (?, ?);",
-                (action_execution_id, organization_id)
+                "INSERT INTO exec_organizations (action_execution_id, name, phone, contact_person, notes) VALUES (?, ?, ?, ?, ?);",
+                (
+                    action_execution_id,
+                    org_data.get('name', ''),
+                    org_data.get('phone', None),
+                    org_data.get('contact_person', None),
+                    org_data.get('notes', None)
+                )
             )
             conn.commit()
             new_id = cursor.lastrowid
             cursor.close()
             conn.close()
-            logger.info(f"SQLiteDatabaseManager: Организация ID {organization_id} привязана к действию ID {action_execution_id}.")
-            return new_id > 0
+            logger.info(f"SQLiteDatabaseManager: Создана организация с ID {new_id} для выполнения действия ID {action_execution_id}.")
+            return new_id
         except sqlite3.Error as e:
-            logger.error(f"SQLiteDatabaseManager: Ошибка при привязке организации к действию: {e}")
-            return False
+            logger.error(f"SQLiteDatabaseManager: Ошибка при создании организации для выполнения действия ID {action_execution_id}: {e}")
+            return 0
         except Exception as e:
-            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при привязке организации к действию: {e}")
-            return False
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при создании организации для выполнения действия ID {action_execution_id}: {e}")
+            return 0
 
-    def remove_organization_from_action_execution(self, action_execution_id: int, organization_id: int) -> bool:
-        """Отвязать организацию от действия."""
+    def remove_organization_from_action_execution(self, exec_org_id: int) -> bool:
+        """Удалить организацию из выполнения действия."""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "DELETE FROM action_execution_organizations WHERE action_execution_id = ? AND organization_id = ?;",
-                (action_execution_id, organization_id)
+                "DELETE FROM exec_organizations WHERE id = ?;",
+                (exec_org_id,)
             )
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
             conn.close()
-            logger.info(f"SQLiteDatabaseManager: Отвязано {affected_rows} организаций от действия ID {action_execution_id}.")
+            logger.info(f"SQLiteDatabaseManager: Удалено {affected_rows} организаций из выполнения действия.")
             return affected_rows > 0
         except sqlite3.Error as e:
-            logger.error(f"SQLiteDatabaseManager: Ошибка при отвязке организации от действия: {e}")
+            logger.error(f"SQLiteDatabaseManager: Ошибка при удалении организации из выполнения действия: {e}")
             return False
         except Exception as e:
-            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при отвязке организации от действия: {e}")
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при удалении организации из выполнения действия: {e}")
             return False
