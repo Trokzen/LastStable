@@ -17,7 +17,11 @@ Popup {
     // Свойства
     property bool isEditMode: false
     property int currentOrganizationId: -1
-
+    property string orgName: ""
+    property string orgPhone: ""
+    property string orgContactPerson: ""
+    property string orgNotes: ""
+    
     // Сигналы
     signal organizationSaved()
 
@@ -407,6 +411,7 @@ Popup {
                             }
 
                             var orgData = {
+                                "action_id": actionEditorDialog.currentActionId, // Берем из родителя
                                 "name": nameField.text.trim(),
                                 "phone": phoneField.text.trim(),
                                 "contact_person": contactPersonField.text.trim(),
@@ -423,15 +428,19 @@ Popup {
                                     errorMessageLabel.text = "Ошибка при сохранении. Проверьте логи."
                                 }
                             } else {
-                                var newId = appData.createOrganization(orgData)
-                                if (newId && newId > 0) {
-                                    organizationEditorDialog.currentOrganizationId = newId
-                                    organizationEditorDialog.isEditMode = true
-                                    dialogTitleLabel.text = "Редактировать организацию"
+                                // Создание новой организации
+                                console.log("QML OrganizationEditorDialog: Создание новой организации для действия ID:", orgData.action_id);
+                                result = appData.createOrganization(orgData)
+                                if (result && result > 0) {
+                                    console.log("QML OrganizationEditorDialog: Организация создана с ID:", result);
+                                    // Обновляем currentOrganizationId для возможности добавления файлов
+                                    organizationEditorDialog.currentOrganizationId = result;
                                     organizationEditorDialog.organizationSaved()
-                                    loadReferenceFiles()
+                                    // Не закрываем диалог, чтобы пользователь мог добавить файлы
+                                    infoMessageDialog.text = "Организация успешно создана! Теперь вы можете добавить справочные материалы."
+                                    infoMessageDialog.open()
                                 } else {
-                                    errorMessageLabel.text = "Ошибка при сохранении. Проверьте логи."
+                                    errorMessageLabel.text = "Ошибка при создании организации. Проверьте логи."
                                 }
                             }
                         }
@@ -571,6 +580,11 @@ Popup {
 
     onOpened: {
         errorMessageLabel.text = ""
+        // Заполняем поля данными из свойств
+        nameField.text = orgName || ""
+        phoneField.text = orgPhone || ""
+        contactPersonField.text = orgContactPerson || ""
+        notesArea.text = orgNotes || ""
         nameField.forceActiveFocus()
     }
 }

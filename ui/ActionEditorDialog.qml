@@ -18,8 +18,21 @@ Popup {
     property bool isEditMode: false // <-- Добавьте эту строку, если её нет
     property int currentActionId: -1
     property int currentAlgorithmId: -1
+    property var organizationsList: [] // Список организаций для текущего действия
+    property var currentEditingOrg: null // Организация, которую сейчас редактируем
 
     signal actionSaved()
+
+    // --- Диалог редактирования организации (внешний компонент) ---
+    OrganizationEditorDialog {
+        id: organizationEditorDialog
+        parent: actionEditorDialog
+        
+        onOrganizationSaved: {
+            console.log("QML ActionEditorDialog: Организация успешно сохранена (сигнал)");
+            loadOrganizationsList();
+        }
+    }
 
     // --- Для выбора файлов ---
     FileDialog {
@@ -747,6 +760,122 @@ Popup {
                     }
                 }
                 // --- ---
+
+                // --- ОРГАНИЗАЦИИ ---
+                Label {
+                    text: "Организации:"
+                    Layout.alignment: Qt.AlignRight | Qt.AlignTop
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    
+                    // Список организаций
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 120
+                        clip: true
+                        
+                        ListView {
+                            id: organizationsListView
+                            width: parent.width
+                            model: organizationsList
+                            delegate: Rectangle {
+                                width: ListView.view.width
+                                height: orgColumn.height + 10
+                                color: index % 2 === 0 ? "#f9f9f9" : "white"
+                                border.color: "#ddd"
+                                border.width: 1
+                                radius: 3
+                                
+                                Column {
+                                    id: orgColumn
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.margins: 5
+                                    width: parent.width - 70 // место для кнопок
+                                    
+                                    Text {
+                                        text: modelData.name || "Без названия"
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                        width: parent.width
+                                    }
+                                    Text {
+                                        text: {
+                                            var parts = [];
+                                            if (modelData.phone) parts.push("Тел: " + modelData.phone);
+                                            if (modelData.contact_person) parts.push("Контакт: " + modelData.contact_person);
+                                            return parts.join(" | ");
+                                        }
+                                        font.pixelSize: 9
+                                        color: "#666"
+                                        elide: Text.ElideRight
+                                        width: parent.width
+                                    }
+                                }
+                                
+                                // Кнопки управления
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 5
+                                    spacing: 3
+                                    
+                                    Button {
+                                        text: "✏️"
+                                        font.pixelSize: 10
+                                        Layout.preferredWidth: 25
+                                        Layout.preferredHeight: 20
+                                        onClicked: {
+                                            console.log("QML ActionEditorDialog: Редактировать организацию", modelData.id);
+                                            openOrganizationEditor(modelData);
+                                        }
+                                    }
+                                    
+                                    Button {
+                                        text: "🗑️"
+                                        font.pixelSize: 10
+                                        Layout.preferredWidth: 25
+                                        Layout.preferredHeight: 20
+                                        onClicked: {
+                                            console.log("QML ActionEditorDialog: Удалить организацию", modelData.id);
+                                            deleteOrganization(modelData.id);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Сообщение если список пуст
+                            Label {
+                                anchors.centerIn: parent
+                                text: "Нет организаций"
+                                color: "#999"
+                                visible: organizationsListView.count === 0
+                            }
+                        }
+                    }
+                    
+                    // Кнопки добавления организации
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 5
+                        
+                        Button {
+                            text: "+ Добавить организацию"
+                            onClicked: {
+                                console.log("QML ActionEditorDialog: Добавить новую организацию");
+                                openOrganizationEditor({});
+                            }
+                        }
+                        
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+                // --- ---
             }
         }
 
@@ -857,6 +986,9 @@ Popup {
         contactPhonesArea.text = "";
         reportMaterialsArea.text = "";
         errorMessageLabel.text = "";
+        
+        // Сброс списка организаций (для нового действия организаций еще нет)
+        organizationsList = [];
     }
 
     /**
@@ -881,6 +1013,62 @@ Popup {
         contactPhonesArea.text = actionData.contact_phones || "";
         reportMaterialsArea.text = actionData.report_materials || "";
         errorMessageLabel.text = "";
+        
+        // Загрузка списка организаций для этого действия
+        loadOrganizationsList();
+    }
+    
+    /**
+     * Загружает список организаций для текущего действия
+     */
+    function loadOrganizationsList() {
+        if (currentActionId > 0) {
+            console.log("QML ActionEditorDialog: Загрузка организаций для действия ID:", currentActionId);
+            organizationsList = appData.getOrganizationsForAction(currentActionId);
+            console.log("QML ActionEditorDialog: Загружено организаций:", organizationsList.length);
+        } else {
+            organizationsList = [];
+        }
+    }
+    
+    /**
+     * Открывает редактор организации (диалог или inline)
+     */
+    function openOrganizationEditor(orgData) {
+        // Устанавливаем текущую редактируемую организацию
+        currentEditingOrg = orgData || null;
+        
+        // Передаем данные и контекст во внешний диалог
+        organizationEditorDialog.isEditMode = !!orgData && !!orgData.id;
+        organizationEditorDialog.currentOrganizationId = orgData ? (orgData.id || -1) : -1;
+        organizationEditorDialog.orgName = orgData ? (orgData.name || "") : "";
+        organizationEditorDialog.orgPhone = orgData ? (orgData.phone || "") : "";
+        organizationEditorDialog.orgContactPerson = orgData ? (orgData.contact_person || "") : "";
+        organizationEditorDialog.orgNotes = orgData ? (orgData.notes || "") : "";
+        
+        // Открываем диалог
+        organizationEditorDialog.open();
+    }
+    
+    /**
+     * Удаляет организацию
+     */
+    function deleteOrganization(orgId) {
+        // TODO: Заменить confirm на собственный QML-диалог
+        if (!confirm("Вы уверены, что хотите удалить эту организацию?")) {
+            return;
+        }
+        
+        console.log("QML ActionEditorDialog: Удаление организации ID:", orgId);
+        var result = appData.deleteOrganization(orgId);
+        
+        if (result === true) {
+            console.log("QML ActionEditorDialog: Организация успешно удалена");
+            loadOrganizationsList(); // Перезагружаем список
+        } else {
+            console.warn("QML ActionEditorDialog: Ошибка при удалении организации:", result);
+            alert("Ошибка при удалении организации: " + (typeof result === 'string' ? result : "Неизвестная ошибка"));
+        }
     }
 
     /**

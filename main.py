@@ -3275,7 +3275,7 @@ class ApplicationData(QObject):
 
     @Slot(result='QVariant')
     def getAllOrganizations(self):
-        """Получить все организации для QML."""
+        """Получить все организации для QML (для обратной совместимости)."""
         if self.database_manager:
             try:
                 result = self.database_manager.get_all_organizations()
@@ -3294,17 +3294,36 @@ class ApplicationData(QObject):
             print("Python ApplicationData: Менеджер БД не инициализирован.")
             return []
 
+    @Slot(int, result='QVariant')
+    def getOrganizationsForAction(self, action_id: int):
+        """Получить организации, привязанные к конкретному действию (шаблону)."""
+        if self.database_manager:
+            try:
+                orgs = self.database_manager.get_organizations_for_action(action_id)
+                result = []
+                for org in orgs:
+                    org_with_files = dict(org)
+                    files = self.database_manager.get_organization_reference_files(org['id'])
+                    org_with_files['reference_files'] = files
+                    result.append(org_with_files)
+                return result
+            except Exception as e:
+                print(f"Python ApplicationData: Ошибка при получении организаций для действия: {e}")
+                return []
+        return []
+
     @Slot('QVariant', result='QVariant')
     def createOrganization(self, org_data: 'QVariant'):
-        """Создать организацию. Возвращает ID новой записи или 0 при ошибке."""
+        """Создать организацию. Возвращает ID новой записи или -1 при ошибке.
+        Требуется action_id в org_data."""
         py_data = org_data.toVariant() if hasattr(org_data, 'toVariant') else org_data
         if self.database_manager:
             try:
                 return self.database_manager.create_organization(py_data)
             except Exception as e:
                 print(f"Python ApplicationData: Ошибка при создании организации: {e}")
-                return 0
-        return 0
+                return -1
+        return -1
 
     @Slot(int, 'QVariant', result=bool)
     def updateOrganization(self, org_id: int, org_data: 'QVariant') -> bool:
@@ -3340,16 +3359,16 @@ class ApplicationData(QObject):
                 return []
         return []
 
-    @Slot(int, str, str, result=bool)
-    def addOrganizationReferenceFile(self, org_id: int, file_path: str, file_type: str = 'other') -> bool:
-        """Добавить справочный файл к организации."""
+    @Slot(int, str, str, result=int)
+    def addOrganizationReferenceFile(self, org_id: int, file_path: str, file_type: str = 'other') -> int:
+        """Добавить справочный файл к организации. Возвращает ID нового файла или -1 при ошибке."""
         if self.database_manager:
             try:
                 return self.database_manager.add_organization_reference_file(org_id, file_path, file_type)
             except Exception as e:
                 print(f"Python ApplicationData: Ошибка при добавлении файла: {e}")
-                return False
-        return False
+                return -1
+        return -1
 
     @Slot(int, result=bool)
     def deleteOrganizationReferenceFile(self, file_id: int) -> bool:
