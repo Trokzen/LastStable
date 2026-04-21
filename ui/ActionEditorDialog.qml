@@ -911,6 +911,7 @@ Popup {
                         
                         Button {
                             text: "+ Добавить организацию"
+                            enabled: isEditMode
                             onClicked: {
                                 console.log("QML ActionEditorDialog: Добавить новую организацию");
                                 openOrganizationEditor({});
