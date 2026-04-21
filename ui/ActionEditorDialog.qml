@@ -1082,16 +1082,16 @@ Popup {
      * Открывает редактор организации (диалог или inline)
      */
     function openOrganizationEditor(orgData) {
-        // Устанавливаем текущую редактируемую организацию
-        currentEditingOrg = orgData || null;
+        // Проверяем режим редактирования
+        var isEdit = !!orgData && !!orgData.id;
         
-        // Передаем данные и контекст во внешний диалог
-        organizationEditorDialog.isEditMode = !!orgData && !!orgData.id;
-        organizationEditorDialog.currentOrganizationId = orgData ? (orgData.id || -1) : -1;
-        organizationEditorDialog.orgName = orgData ? (orgData.name || "") : "";
-        organizationEditorDialog.orgPhone = orgData ? (orgData.phone || "") : "";
-        organizationEditorDialog.orgContactPerson = orgData ? (orgData.contact_person || "") : "";
-        organizationEditorDialog.orgNotes = orgData ? (orgData.notes || "") : "";
+        if (isEdit) {
+            // Режим редактирования - загружаем данные
+            organizationEditorDialog.loadDataForEdit(orgData);
+        } else {
+            // Режим добавления - сбрасываем форму
+            organizationEditorDialog.resetForAdd();
+        }
         
         // Открываем диалог
         organizationEditorDialog.open();
