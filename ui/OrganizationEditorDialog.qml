@@ -411,6 +411,7 @@ Popup {
                             }
 
                             var orgData = {
+                                "action_id": actionEditorDialog.currentActionId, // Берем из родителя
                                 "name": nameField.text.trim(),
                                 "phone": phoneField.text.trim(),
                                 "contact_person": contactPersonField.text.trim(),
@@ -427,10 +428,20 @@ Popup {
                                     errorMessageLabel.text = "Ошибка при сохранении. Проверьте логи."
                                 }
                             } else {
-                                // При создании новой организации, нам нужен action_id из родительского диалога
-                                // Но этот диалог теперь используется только для редактирования/просмотра
-                                // Создание происходит через ActionEditorDialog
-                                errorMessageLabel.text = "Создание организации должно выполняться через ActionEditorDialog"
+                                // Создание новой организации
+                                console.log("QML OrganizationEditorDialog: Создание новой организации для действия ID:", orgData.action_id);
+                                result = appData.createOrganization(orgData)
+                                if (result && result > 0) {
+                                    console.log("QML OrganizationEditorDialog: Организация создана с ID:", result);
+                                    // Обновляем currentOrganizationId для возможности добавления файлов
+                                    organizationEditorDialog.currentOrganizationId = result;
+                                    organizationEditorDialog.organizationSaved()
+                                    // Не закрываем диалог, чтобы пользователь мог добавить файлы
+                                    infoMessageDialog.text = "Организация успешно создана! Теперь вы можете добавить справочные материалы."
+                                    infoMessageDialog.open()
+                                } else {
+                                    errorMessageLabel.text = "Ошибка при создании организации. Проверьте логи."
+                                }
                             }
                         }
                     }

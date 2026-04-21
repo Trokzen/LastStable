@@ -3,6 +3,7 @@ import QtQuick 6.5
 import QtQuick.Controls 6.5
 import QtQuick.Layouts 6.5
 import QtQuick.Dialogs 6.5 // Для FileDialog
+import "qrc:/ui" // Для OrganizationEditorDialog
 
 Popup {
     id: actionEditorDialog
@@ -23,117 +24,14 @@ Popup {
 
     signal actionSaved()
 
-    // --- Диалог ввода данных организации ---
-    Dialog {
+    // --- Диалог редактирования организации (внешний компонент) ---
+    OrganizationEditorDialog {
         id: organizationEditorDialog
-        title: "Добавление организации"
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        modal: true
-        x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
-        width: Math.min(parent.width * 0.5, 500)
+        parent: actionEditorDialog
         
-        property string orgName: ""
-        property string orgPhone: ""
-        property string orgContactPerson: ""
-        property string orgNotes: ""
-        
-        onAccepted: {
-            var orgToSend = {
-                "action_id": currentActionId,
-                "name": orgName,
-                "phone": orgPhone || null,
-                "contact_person": orgContactPerson || null,
-                "notes": orgNotes || null
-            };
-            
-            var result;
-            if (currentEditingOrg && currentEditingOrg.id) {
-                // Редактирование существующей
-                console.log("QML ActionEditorDialog: Обновление организации ID:", currentEditingOrg.id);
-                result = appData.updateOrganization(currentEditingOrg.id, orgToSend);
-            } else {
-                // Создание новой
-                console.log("QML ActionEditorDialog: Создание новой организации для действия ID:", currentActionId);
-                result = appData.createOrganization(orgToSend);
-            }
-            
-            // Проверяем результат: updateOrganization возвращает bool, createOrganization возвращает ID (>0) или -1
-            var success = false;
-            if (typeof result === 'boolean') {
-                success = result;
-            } else if (typeof result === 'number' && result > 0) {
-                success = true;
-            }
-            
-            if (success) {
-                console.log("QML ActionEditorDialog: Организация успешно сохранена");
-                loadOrganizationsList();
-            } else {
-                errorMessageLabel.text = "Ошибка при сохранении организации: " + (result.message || "Неизвестная ошибка");
-            }
-        }
-        
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 15
-            
-            Label {
-                text: "Название:*"
-                Layout.fillWidth: true
-            }
-            TextField {
-                id: orgNameField
-                Layout.fillWidth: true
-                placeholderText: "Введите название организации..."
-                text: organizationEditorDialog.orgName
-                onTextChanged: organizationEditorDialog.orgName = text
-            }
-            
-            Label {
-                text: "Телефон:"
-                Layout.fillWidth: true
-            }
-            TextField {
-                id: orgPhoneField
-                Layout.fillWidth: true
-                placeholderText: "+7 (XXX) XXX-XX-XX"
-                text: organizationEditorDialog.orgPhone
-                onTextChanged: organizationEditorDialog.orgPhone = text
-            }
-            
-            Label {
-                text: "Контактное лицо:"
-                Layout.fillWidth: true
-            }
-            TextField {
-                id: orgContactPersonField
-                Layout.fillWidth: true
-                placeholderText: "ФИО контактного лица..."
-                text: organizationEditorDialog.orgContactPerson
-                onTextChanged: organizationEditorDialog.orgContactPerson = text
-            }
-            
-            Label {
-                text: "Заметки:"
-                Layout.fillWidth: true
-            }
-            TextArea {
-                id: orgNotesField
-                Layout.fillWidth: true
-                Layout.preferredHeight: 80
-                placeholderText: "Дополнительные заметки..."
-                text: organizationEditorDialog.orgNotes
-                onTextChanged: organizationEditorDialog.orgNotes = text
-            }
-        }
-        
-        onOpened: {
-            orgNameField.text = organizationEditorDialog.orgName || ""
-            orgPhoneField.text = organizationEditorDialog.orgPhone || ""
-            orgContactPersonField.text = organizationEditorDialog.orgContactPerson || ""
-            orgNotesField.text = organizationEditorDialog.orgNotes || ""
-            orgNameField.forceActiveFocus()
+        onOrganizationSaved: {
+            console.log("QML ActionEditorDialog: Организация успешно сохранена (сигнал)");
+            loadOrganizationsList();
         }
     }
 
@@ -1141,12 +1039,13 @@ Popup {
         // Устанавливаем текущую редактируемую организацию
         currentEditingOrg = orgData || null;
         
-        // Заполняем диалог данными
+        // Передаем данные и контекст во внешний диалог
+        organizationEditorDialog.isEditMode = !!orgData && !!orgData.id;
+        organizationEditorDialog.currentOrganizationId = orgData ? (orgData.id || -1) : -1;
         organizationEditorDialog.orgName = orgData ? (orgData.name || "") : "";
         organizationEditorDialog.orgPhone = orgData ? (orgData.phone || "") : "";
         organizationEditorDialog.orgContactPerson = orgData ? (orgData.contact_person || "") : "";
         organizationEditorDialog.orgNotes = orgData ? (orgData.notes || "") : "";
-        organizationEditorDialog.title = orgData ? "Редактирование организации" : "Добавление организации";
         
         // Открываем диалог
         organizationEditorDialog.open();
