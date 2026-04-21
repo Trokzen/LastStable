@@ -586,5 +586,10 @@ Popup {
         contactPersonField.text = orgContactPerson || ""
         notesArea.text = orgNotes || ""
         nameField.forceActiveFocus()
+        
+        // Загружаем справочные файлы для текущей организации
+        if (isEditMode && currentOrganizationId > 0) {
+            loadReferenceFiles()
+        }
     }
 }
