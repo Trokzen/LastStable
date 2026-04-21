@@ -17,7 +17,11 @@ Popup {
     // Свойства
     property bool isEditMode: false
     property int currentOrganizationId: -1
-
+    property string orgName: ""
+    property string orgPhone: ""
+    property string orgContactPerson: ""
+    property string orgNotes: ""
+    
     // Сигналы
     signal organizationSaved()
 
@@ -423,16 +427,10 @@ Popup {
                                     errorMessageLabel.text = "Ошибка при сохранении. Проверьте логи."
                                 }
                             } else {
-                                var newId = appData.createOrganization(orgData)
-                                if (newId && newId > 0) {
-                                    organizationEditorDialog.currentOrganizationId = newId
-                                    organizationEditorDialog.isEditMode = true
-                                    dialogTitleLabel.text = "Редактировать организацию"
-                                    organizationEditorDialog.organizationSaved()
-                                    loadReferenceFiles()
-                                } else {
-                                    errorMessageLabel.text = "Ошибка при сохранении. Проверьте логи."
-                                }
+                                // При создании новой организации, нам нужен action_id из родительского диалога
+                                // Но этот диалог теперь используется только для редактирования/просмотра
+                                // Создание происходит через ActionEditorDialog
+                                errorMessageLabel.text = "Создание организации должно выполняться через ActionEditorDialog"
                             }
                         }
                     }
@@ -571,6 +569,11 @@ Popup {
 
     onOpened: {
         errorMessageLabel.text = ""
+        // Заполняем поля данными из свойств
+        nameField.text = orgName || ""
+        phoneField.text = orgPhone || ""
+        contactPersonField.text = orgContactPerson || ""
+        notesArea.text = orgNotes || ""
         nameField.forceActiveFocus()
     }
 }

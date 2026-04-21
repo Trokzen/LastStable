@@ -19,8 +19,115 @@ Popup {
     property int currentActionId: -1
     property int currentAlgorithmId: -1
     property var organizationsList: [] // Список организаций для текущего действия
+    property var currentEditingOrg: null // Организация, которую сейчас редактируем
 
     signal actionSaved()
+
+    // --- Диалог ввода данных организации ---
+    Dialog {
+        id: organizationEditorDialog
+        title: "Добавление организации"
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(parent.width * 0.5, 500)
+        
+        property string orgName: ""
+        property string orgPhone: ""
+        property string orgContactPerson: ""
+        property string orgNotes: ""
+        
+        onAccepted: {
+            var orgToSend = {
+                "action_id": currentActionId,
+                "name": orgName,
+                "phone": orgPhone || null,
+                "contact_person": orgContactPerson || null,
+                "notes": orgNotes || null
+            };
+            
+            var result;
+            if (currentEditingOrg && currentEditingOrg.id) {
+                // Редактирование существующей
+                console.log("QML ActionEditorDialog: Обновление организации ID:", currentEditingOrg.id);
+                result = appData.updateOrganization(currentEditingOrg.id, orgToSend);
+            } else {
+                // Создание новой
+                console.log("QML ActionEditorDialog: Создание новой организации для действия ID:", currentActionId);
+                result = appData.createOrganization(orgToSend);
+            }
+            
+            if (result === true || (typeof result === 'number' && result > 0)) {
+                console.log("QML ActionEditorDialog: Организация успешно сохранена");
+                loadOrganizationsList();
+            } else {
+                errorMessageLabel.text = "Ошибка при сохранении организации: " + (result.message || "Неизвестная ошибка");
+            }
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 15
+            
+            Label {
+                text: "Название:*"
+                Layout.fillWidth: true
+            }
+            TextField {
+                id: orgNameField
+                Layout.fillWidth: true
+                placeholderText: "Введите название организации..."
+                text: organizationEditorDialog.orgName
+                onTextChanged: organizationEditorDialog.orgName = text
+            }
+            
+            Label {
+                text: "Телефон:"
+                Layout.fillWidth: true
+            }
+            TextField {
+                id: orgPhoneField
+                Layout.fillWidth: true
+                placeholderText: "+7 (XXX) XXX-XX-XX"
+                text: organizationEditorDialog.orgPhone
+                onTextChanged: organizationEditorDialog.orgPhone = text
+            }
+            
+            Label {
+                text: "Контактное лицо:"
+                Layout.fillWidth: true
+            }
+            TextField {
+                id: orgContactPersonField
+                Layout.fillWidth: true
+                placeholderText: "ФИО контактного лица..."
+                text: organizationEditorDialog.orgContactPerson
+                onTextChanged: organizationEditorDialog.orgContactPerson = text
+            }
+            
+            Label {
+                text: "Заметки:"
+                Layout.fillWidth: true
+            }
+            TextArea {
+                id: orgNotesField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 80
+                placeholderText: "Дополнительные заметки..."
+                text: organizationEditorDialog.orgNotes
+                onTextChanged: organizationEditorDialog.orgNotes = text
+            }
+        }
+        
+        onOpened: {
+            orgNameField.text = organizationEditorDialog.orgName || ""
+            orgPhoneField.text = organizationEditorDialog.orgPhone || ""
+            orgContactPersonField.text = organizationEditorDialog.orgContactPerson || ""
+            orgNotesField.text = organizationEditorDialog.orgNotes || ""
+            orgNameField.forceActiveFocus()
+        }
+    }
 
     // --- Для выбора файлов ---
     FileDialog {
@@ -1023,52 +1130,25 @@ Popup {
      * Открывает редактор организации (диалог или inline)
      */
     function openOrganizationEditor(orgData) {
-        // Для простоты используем prompt-подобный подход через создание временного диалога
-        // В будущем можно сделать полноценный OrganizationEditorDialog
-        var name = prompt("Название организации:", orgData.name || "");
-        if (name === null) return; // Отмена
+        // Устанавливаем текущую редактируемую организацию
+        currentEditingOrg = orgData || null;
         
-        var phone = prompt("Телефон:", orgData.phone || "");
-        if (phone === null) return;
+        // Заполняем диалог данными
+        organizationEditorDialog.orgName = orgData ? (orgData.name || "") : "";
+        organizationEditorDialog.orgPhone = orgData ? (orgData.phone || "") : "";
+        organizationEditorDialog.orgContactPerson = orgData ? (orgData.contact_person || "") : "";
+        organizationEditorDialog.orgNotes = orgData ? (orgData.notes || "") : "";
+        organizationEditorDialog.title = orgData ? "Редактирование организации" : "Добавление организации";
         
-        var contactPerson = prompt("Контактное лицо:", orgData.contact_person || "");
-        if (contactPerson === null) return;
-        
-        var notes = prompt("Заметки:", orgData.notes || "");
-        if (notes === null) return;
-        
-        var orgToSend = {
-            "action_id": currentActionId,
-            "name": name,
-            "phone": phone || null,
-            "contact_person": contactPerson || null,
-            "notes": notes || null
-        };
-        
-        var result;
-        if (orgData && orgData.id) {
-            // Редактирование существующей
-            console.log("QML ActionEditorDialog: Обновление организации ID:", orgData.id);
-            result = appData.updateOrganization(orgData.id, orgToSend);
-        } else {
-            // Создание новой
-            console.log("QML ActionEditorDialog: Создание новой организации для действия ID:", currentActionId);
-            result = appData.createOrganization(orgToSend);
-        }
-        
-        if (result === true || (typeof result === 'number' && result > 0)) {
-            console.log("QML ActionEditorDialog: Организация успешно сохранена");
-            loadOrganizationsList(); // Перезагружаем список
-        } else {
-            console.warn("QML ActionEditorDialog: Ошибка при сохранении организации:", result);
-            alert("Ошибка при сохранении организации: " + (typeof result === 'string' ? result : "Неизвестная ошибка"));
-        }
+        // Открываем диалог
+        organizationEditorDialog.open();
     }
     
     /**
      * Удаляет организацию
      */
     function deleteOrganization(orgId) {
+        // TODO: Заменить confirm на собственный QML-диалог
         if (!confirm("Вы уверены, что хотите удалить эту организацию?")) {
             return;
         }
