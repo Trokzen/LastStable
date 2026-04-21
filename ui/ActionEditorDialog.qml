@@ -70,6 +70,53 @@ Popup {
             console.log("QML ActionEditorDialog: FileDialog rejected")
         }
     }
+    
+    // --- Диалог подтверждения удаления организации ---
+    Dialog {
+        id: deleteOrganizationConfirmationDialog
+        title: "Подтверждение удаления"
+        standardButtons: Dialog.Yes | Dialog.No
+        modal: true
+        property int organizationIdToDelete: -1
+        
+        Label {
+            text: "Вы действительно хотите удалить эту организацию?"
+            font.bold: true
+            wrapMode: Text.Wrap
+        }
+        
+        onAccepted: {
+            if (organizationIdToDelete > 0) {
+                console.log("QML ActionEditorDialog: Удаление организации ID:", organizationIdToDelete);
+                var result = appData.deleteOrganization(organizationIdToDelete);
+                
+                if (result === true) {
+                    console.log("QML ActionEditorDialog: Организация успешно удалена");
+                    loadOrganizationsList(); // Перезагружаем список
+                } else {
+                    console.warn("QML ActionEditorDialog: Ошибка при удалении организации:", result);
+                    infoMessageDialog.text = "Ошибка при удалении организации: " + (typeof result === 'string' ? result : "Неизвестная ошибка");
+                    infoMessageDialog.open();
+                }
+            }
+        }
+    }
+    
+    // --- Информационный диалог ---
+    Dialog {
+        id: infoMessageDialog
+        title: "Информация"
+        standardButtons: Dialog.Ok
+        modal: true
+        property string text: ""
+        
+        Label { 
+            text: infoMessageDialog.text
+            wrapMode: Text.Wrap
+            width: parent.width
+        }
+    }
+    
     // --- ---
 
     background: Rectangle {
@@ -1035,16 +1082,16 @@ Popup {
      * Открывает редактор организации (диалог или inline)
      */
     function openOrganizationEditor(orgData) {
-        // Устанавливаем текущую редактируемую организацию
-        currentEditingOrg = orgData || null;
+        // Проверяем режим редактирования
+        var isEdit = !!orgData && !!orgData.id;
         
-        // Передаем данные и контекст во внешний диалог
-        organizationEditorDialog.isEditMode = !!orgData && !!orgData.id;
-        organizationEditorDialog.currentOrganizationId = orgData ? (orgData.id || -1) : -1;
-        organizationEditorDialog.orgName = orgData ? (orgData.name || "") : "";
-        organizationEditorDialog.orgPhone = orgData ? (orgData.phone || "") : "";
-        organizationEditorDialog.orgContactPerson = orgData ? (orgData.contact_person || "") : "";
-        organizationEditorDialog.orgNotes = orgData ? (orgData.notes || "") : "";
+        if (isEdit) {
+            // Режим редактирования - загружаем данные
+            organizationEditorDialog.loadDataForEdit(orgData);
+        } else {
+            // Режим добавления - сбрасываем форму
+            organizationEditorDialog.resetForAdd();
+        }
         
         // Открываем диалог
         organizationEditorDialog.open();
@@ -1054,21 +1101,9 @@ Popup {
      * Удаляет организацию
      */
     function deleteOrganization(orgId) {
-        // TODO: Заменить confirm на собственный QML-диалог
-        if (!confirm("Вы уверены, что хотите удалить эту организацию?")) {
-            return;
-        }
-        
-        console.log("QML ActionEditorDialog: Удаление организации ID:", orgId);
-        var result = appData.deleteOrganization(orgId);
-        
-        if (result === true) {
-            console.log("QML ActionEditorDialog: Организация успешно удалена");
-            loadOrganizationsList(); // Перезагружаем список
-        } else {
-            console.warn("QML ActionEditorDialog: Ошибка при удалении организации:", result);
-            alert("Ошибка при удалении организации: " + (typeof result === 'string' ? result : "Неизвестная ошибка"));
-        }
+        // Открываем диалог подтверждения
+        deleteOrganizationConfirmationDialog.organizationIdToDelete = orgId;
+        deleteOrganizationConfirmationDialog.open();
     }
 
     /**

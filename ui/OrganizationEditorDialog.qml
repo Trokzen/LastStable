@@ -435,8 +435,12 @@ Popup {
                                     console.log("QML OrganizationEditorDialog: Организация создана с ID:", result);
                                     // Обновляем currentOrganizationId для возможности добавления файлов
                                     organizationEditorDialog.currentOrganizationId = result;
+                                    // Переключаемся в режим редактирования
+                                    organizationEditorDialog.isEditMode = true;
+                                    dialogTitleLabel.text = "Редактировать организацию";
+                                    // Загружаем файлы для новой организации
+                                    loadReferenceFiles();
                                     organizationEditorDialog.organizationSaved()
-                                    // Не закрываем диалог, чтобы пользователь мог добавить файлы
                                     infoMessageDialog.text = "Организация успешно создана! Теперь вы можете добавить справочные материалы."
                                     infoMessageDialog.open()
                                 } else {
@@ -552,6 +556,11 @@ Popup {
         errorMessageLabel.text = ""
         dialogTitleLabel.text = "Добавить организацию"
         referenceFilesListModel.clear()
+        // Сбрасываем свойства orgName, orgPhone и т.д., чтобы onOpened не использовал старые значения
+        orgName = ""
+        orgPhone = ""
+        orgContactPerson = ""
+        orgNotes = ""
     }
 
     function loadDataForEdit(orgData) {
@@ -562,7 +571,12 @@ Popup {
         contactPersonField.text = orgData.contact_person || ""
         notesArea.text = orgData.notes || ""
         errorMessageLabel.text = ""
-        dialogTitleLabel.text = "Редактировать сведения об организации"
+        dialogTitleLabel.text = "Редактировать организацию"
+        // Обновляем свойства для onOpened
+        orgName = orgData.name || ""
+        orgPhone = orgData.phone || ""
+        orgContactPerson = orgData.contact_person || ""
+        orgNotes = orgData.notes || ""
         loadReferenceFiles()
     }
 
@@ -586,5 +600,13 @@ Popup {
         contactPersonField.text = orgContactPerson || ""
         notesArea.text = orgNotes || ""
         nameField.forceActiveFocus()
+        
+        // Загружаем справочные файлы для текущей организации только в режиме редактирования
+        if (isEditMode && currentOrganizationId > 0) {
+            loadReferenceFiles()
+        } else {
+            // В режиме добавления очищаем список файлов
+            referenceFilesListModel.clear()
+        }
     }
 }
