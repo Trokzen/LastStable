@@ -58,7 +58,15 @@ Popup {
                 result = appData.createOrganization(orgToSend);
             }
             
-            if (result === true || (typeof result === 'number' && result > 0)) {
+            // Проверяем результат: updateOrganization возвращает bool, createOrganization возвращает ID (>0) или -1
+            var success = false;
+            if (typeof result === 'boolean') {
+                success = result;
+            } else if (typeof result === 'number' && result > 0) {
+                success = true;
+            }
+            
+            if (success) {
                 console.log("QML ActionEditorDialog: Организация успешно сохранена");
                 loadOrganizationsList();
             } else {

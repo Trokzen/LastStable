@@ -1265,6 +1265,7 @@ class SQLiteDatabaseManager:
             new_id = cursor.lastrowid
             conn.commit()
             cursor.close()
+            conn.close()
 
             if new_id:
                 # Проверка: считываем обратно technical_text
@@ -1274,6 +1275,7 @@ class SQLiteDatabaseManager:
                     c2.execute("SELECT technical_text FROM actions WHERE id = ?", (new_id,))
                     r = c2.fetchone()
                     c2.close()
+                    conn2.close()
                     logger.info(f"Проверка: после вставки technical_text для ID {new_id} = {repr(r[0] if r else 'N/A')}")
 
             if new_id:
@@ -1287,11 +1289,13 @@ class SQLiteDatabaseManager:
             logger.error(f"Ошибка БД при создании действия: {e}")
             if conn:
                 conn.rollback()
+                conn.close()
             return -1
         except Exception as e:
             logger.error(f"Неизвестная ошибка при создании действия: {e}")
             if conn:
                 conn.rollback()
+                conn.close()
             return -1
 
     def update_action(self, action_id: int, action_data: Dict[str, Any]) -> bool:
@@ -3101,7 +3105,8 @@ class SQLiteDatabaseManager:
             return []
 
     def create_organization_for_action(self, action_id: int, org_data: dict) -> int:
-        """Создать новую организацию для конкретного действия. Возвращает ID новой записи или 0 при ошибке."""
+        """Создать новую организацию для конкретного действия. Возвращает ID новой записи или -1 при ошибке."""
+        conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -3118,26 +3123,29 @@ class SQLiteDatabaseManager:
             conn.commit()
             new_id = cursor.lastrowid
             cursor.close()
-            conn.close()
             logger.info(f"SQLiteDatabaseManager: Создана организация с ID {new_id} для действия ID {action_id}.")
-            return new_id
+            return new_id if new_id else -1
         except sqlite3.Error as e:
             logger.error(f"SQLiteDatabaseManager: Ошибка при создании организации для действия ID {action_id}: {e}")
-            return 0
+            return -1
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при создании организации для действия ID {action_id}: {e}")
-            return 0
+            return -1
+        finally:
+            if conn:
+                conn.close()
 
     def create_organization(self, org_data: dict) -> int:
         """Создать организацию (для обратной совместимости). Требует action_id в org_data."""
         action_id = org_data.get('action_id', 0)
         if not action_id:
             logger.error("SQLiteDatabaseManager: create_organization требует action_id в org_data.")
-            return 0
+            return -1
         return self.create_organization_for_action(action_id, org_data)
 
     def update_organization(self, org_id: int, org_data: dict) -> bool:
         """Обновить данные организации."""
+        conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -3154,7 +3162,6 @@ class SQLiteDatabaseManager:
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
-            conn.close()
             logger.info(f"SQLiteDatabaseManager: Обновлено {affected_rows} записей организации с ID {org_id}.")
             return affected_rows > 0
         except sqlite3.Error as e:
@@ -3163,9 +3170,13 @@ class SQLiteDatabaseManager:
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при обновлении организации: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
 
     def delete_organization(self, org_id: int) -> bool:
         """Удалить организацию."""
+        conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -3173,7 +3184,6 @@ class SQLiteDatabaseManager:
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
-            conn.close()
             logger.info(f"SQLiteDatabaseManager: Удалено {affected_rows} организаций с ID {org_id}.")
             return affected_rows > 0
         except sqlite3.Error as e:
@@ -3182,9 +3192,13 @@ class SQLiteDatabaseManager:
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при удалении организации: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
 
     def get_organization_by_id(self, org_id: int) -> dict | None:
         """Получить организацию по ID."""
+        conn = None
         try:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
@@ -3193,7 +3207,6 @@ class SQLiteDatabaseManager:
             row = cursor.fetchone()
             result = dict(row) if row else None
             cursor.close()
-            conn.close()
             return result
         except sqlite3.Error as e:
             logger.error(f"SQLiteDatabaseManager: Ошибка при получении организации по ID {org_id}: {e}")
@@ -3201,6 +3214,9 @@ class SQLiteDatabaseManager:
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении организации по ID {org_id}: {e}")
             return None
+        finally:
+            if conn:
+                conn.close()
 
     # ========================================================================
     # МЕТОДЫ ДЛЯ РАБОТЫ С СПРАВОЧНЫМИ ФАЙЛАМИ ОРГАНИЗАЦИЙ (ШАБЛОНЫ ДЕЙСТВИЙ)
@@ -3208,6 +3224,7 @@ class SQLiteDatabaseManager:
 
     def get_organization_reference_files(self, org_id: int) -> list:
         """Получить все справочные файлы организации."""
+        conn = None
         try:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
@@ -3216,7 +3233,6 @@ class SQLiteDatabaseManager:
             rows = cursor.fetchall()
             files = [dict(row) for row in rows]
             cursor.close()
-            conn.close()
             logger.info(f"SQLiteDatabaseManager: Получено {len(files)} файлов для организации ID {org_id}.")
             return files
         except sqlite3.Error as e:
@@ -3225,28 +3241,35 @@ class SQLiteDatabaseManager:
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении файлов для организации ID {org_id}: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
 
-    def get_organization_reference_files_by_id(self, file_id: int) -> list:
+    def get_organization_reference_files_by_id(self, file_id: int) -> dict | None:
         """Получить справочный файл по ID."""
+        conn = None
         try:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM organization_files WHERE id = ?;", (file_id,))
             row = cursor.fetchone()
-            files = [dict(row)] if row else []
+            result = dict(row) if row else None
             cursor.close()
-            conn.close()
-            return files
+            return result
         except sqlite3.Error as e:
             logger.error(f"SQLiteDatabaseManager: Ошибка при получении файла по ID {file_id}: {e}")
-            return []
+            return None
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении файла по ID {file_id}: {e}")
-            return []
+            return None
+        finally:
+            if conn:
+                conn.close()
 
-    def add_organization_reference_file(self, org_id: int, file_path: str, file_type: str = 'other') -> bool:
-        """Добавить справочный файл к организации."""
+    def add_organization_reference_file(self, org_id: int, file_path: str, file_type: str = 'other') -> int:
+        """Добавить справочный файл к организации. Возвращает ID нового файла или -1 при ошибке."""
+        conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -3257,18 +3280,21 @@ class SQLiteDatabaseManager:
             conn.commit()
             new_id = cursor.lastrowid
             cursor.close()
-            conn.close()
             logger.info(f"SQLiteDatabaseManager: Добавлен файл с ID {new_id} для организации ID {org_id}.")
-            return new_id > 0
+            return new_id if new_id else -1
         except sqlite3.Error as e:
             logger.error(f"SQLiteDatabaseManager: Ошибка при добавлении файла для организации ID {org_id}: {e}")
-            return False
+            return -1
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при добавлении файла для организации ID {org_id}: {e}")
-            return False
+            return -1
+        finally:
+            if conn:
+                conn.close()
 
     def delete_organization_reference_file(self, file_id: int) -> bool:
         """Удалить справочный файл организации."""
+        conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -3276,7 +3302,6 @@ class SQLiteDatabaseManager:
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
-            conn.close()
             logger.info(f"SQLiteDatabaseManager: Удалено {affected_rows} файлов с ID {file_id}.")
             return affected_rows > 0
         except sqlite3.Error as e:
@@ -3285,6 +3310,9 @@ class SQLiteDatabaseManager:
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при удалении файла ID {file_id}: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
 
     # ========================================================================
     # МЕТОДЫ ДЛЯ СВЯЗИ ОРГАНИЗАЦИЙ С ДЕЙСТВИЯМИ (ИСПОЛНЕНИЯ)
