@@ -911,10 +911,14 @@ Popup {
                         
                         Button {
                             text: "+ Добавить организацию"
-                            enabled: isEditMode
                             onClicked: {
-                                console.log("QML ActionEditorDialog: Добавить новую организацию");
-                                openOrganizationEditor({});
+                                if (actionEditorDialog.currentActionId > 0) {
+                                    console.log("QML ActionEditorDialog: Добавить новую организацию");
+                                    openOrganizationEditor({});
+                                } else {
+                                    infoMessageDialog.text = "Сначала сохраните действие, затем добавьте организации."
+                                    infoMessageDialog.open()
+                                }
                             }
                         }
                         
