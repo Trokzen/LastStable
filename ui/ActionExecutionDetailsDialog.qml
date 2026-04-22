@@ -74,6 +74,13 @@ Popup {
     }
 
     function updateCountdown() {
+        // Если статус "Выполнено", показываем "--:--:--"
+        if (actionDetailsDialog.currentStatus === "completed") {
+            remainingTimeLabel.text = "--:--:--"
+            remainingTimeLabel.color = "#95a5a6"
+            return
+        }
+
         var now = getLocalNow()
         var startTimeText = calculatedStartTimeLabel.text
         var endTimeText = calculatedEndTimeLabel.text
