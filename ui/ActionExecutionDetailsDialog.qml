@@ -238,8 +238,15 @@ Popup {
     }
 
     function loadOrganizationsForAction() {
-        // Запрашиваем ВСЕ организации с файлами
-        var orgs = appData.getAllOrganizationsWithReferenceFiles()
+        // Получаем ID текущего действия
+        var currentActionId = getCurrentActionId()
+        if (currentActionId <= 0) {
+            actionDetailsDialog.allOrganizations = []
+            return
+        }
+        
+        // Запрашиваем только организации, привязанные к данному действию
+        var orgs = appData.getOrganizationsForActionExecution(currentActionId)
         if (orgs) {
             actionDetailsDialog.allOrganizations = orgs
         } else {
