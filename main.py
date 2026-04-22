@@ -3417,14 +3417,8 @@ class ApplicationData(QObject):
         """Получить организации, привязанные к действию."""
         if self.database_manager:
             try:
-                orgs = self.database_manager.get_organizations_for_action_execution(action_execution_id)
-                result = []
-                for org in orgs:
-                    files = self.database_manager.get_organization_reference_files(org['id'])
-                    org_with_files = dict(org)
-                    org_with_files['reference_files'] = files
-                    result.append(org_with_files)
-                return result
+                # Метод database_manager уже возвращает организации с файлами из exec_organization_files
+                return self.database_manager.get_organizations_for_action_execution(action_execution_id)
             except Exception as e:
                 print(f"Python ApplicationData: Ошибка при получении организаций: {e}")
                 return []
