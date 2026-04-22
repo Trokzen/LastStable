@@ -3442,10 +3442,19 @@ class SQLiteDatabaseManager:
             """, (action_execution_id,))
             rows = cursor.fetchall()
             organizations = [dict(row) for row in rows]
+            
+            # Для каждой организации получаем файлы из exec_organization_files
+            result = []
+            for org in organizations:
+                org_with_files = dict(org)
+                files = self.get_exec_organization_files(org['id'])
+                org_with_files['reference_files'] = files
+                result.append(org_with_files)
+            
             cursor.close()
             conn.close()
-            logger.info(f"SQLiteDatabaseManager: Получено {len(organizations)} организаций для выполнения действия ID {action_execution_id}.")
-            return organizations
+            logger.info(f"SQLiteDatabaseManager: Получено {len(result)} организаций с файлами для выполнения действия ID {action_execution_id}.")
+            return result
         except sqlite3.Error as e:
             logger.error(f"SQLiteDatabaseManager: Ошибка при получении организаций для выполнения действия ID {action_execution_id}: {e}")
             return []
