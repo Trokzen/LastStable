@@ -859,7 +859,7 @@ class PostgreSQLDatabaseManager:
 
     def duplicate_algorithm(self, original_algorithm_id: int) -> int:
         """
-        Создает копию существующего алгоритма и всех его действий.
+        Создает копию существующего алгоритма и всех его действий, организаций и файлов организаций.
 
         :param original_algorithm_id: ID оригинального алгоритма.
         :return: ID нового алгоритма, если успешно, иначе -1.
@@ -874,19 +874,16 @@ class PostgreSQLDatabaseManager:
 
         try:
             with self.connection.cursor() as cursor:
-                # --- ИСПРАВЛЕНО: Получаем оригинальный алгоритм с явными индексами ---
                 # 1. Получаем данные оригинального алгоритма
                 cursor.execute("""
                     SELECT id, name, category, time_type, description
                     FROM {self.SCHEMA_NAME}.algorithms WHERE id = %s
-                """.format(self=self), (original_algorithm_id,)) # <-- ИСПРАВЛЕНО: format для подстановки SCHEMA_NAME
+                """.format(self=self), (original_algorithm_id,))
                 original_algorithm_row = cursor.fetchone()
                 if not original_algorithm_row:
                     print(f"PostgreSQLDatabaseManager: Оригинальный алгоритм с ID {original_algorithm_id} не найден.")
                     return -1
 
-                # --- ИСПРАВЛЕНО: Явное создание словаря из кортежа ---
-                # original_algorithm = dict(original_algorithm_row) # <-- СТАРОЕ (вызывает ошибку)
                 original_algorithm = {
                     'id': original_algorithm_row[0],
                     'name': original_algorithm_row[1],
@@ -894,27 +891,21 @@ class PostgreSQLDatabaseManager:
                     'time_type': original_algorithm_row[3],
                     'description': original_algorithm_row[4]
                 }
-                # --- ---
                 print(f"PostgreSQLDatabaseManager: Найден оригинальный алгоритм ID {original_algorithm_id}: {original_algorithm['name']}")
 
-                # 2. Формируем данные для нового алгоритма (с пометкой "копия")
-                # --- ИЗМЕНЕНО: Не копируем sort_order ---
+                # 2. Формируем данные для нового алгоритма
                 original_name = original_algorithm.get('name', 'Алгоритм')
-                new_name = f"{original_name} (копия)"
+                new_name = f"{original_name}"
                 new_algorithm_data = {
                     'name': new_name,
                     'category': original_algorithm['category'],
                     'time_type': original_algorithm['time_type'],
                     'description': original_algorithm.get('description', '')
-                    # 'sort_order': original_algorithm['sort_order'] # <-- УДАЛЕНО: Не копируем sort_order
                 }
-                # --- ---
 
                 # 3. Создаем новый алгоритм в БД
-                # --- ИЗМЕНЕНО: Вызываем create_algorithm, который сам установит sort_order ---
                 print(f"PostgreSQLDatabaseManager: Создание нового алгоритма (копии) с данными: {new_algorithm_data}")
                 new_algorithm_id = self.create_algorithm(new_algorithm_data)
-                # --- ---
                 if isinstance(new_algorithm_id, int) and new_algorithm_id > 0:
                     print(f"PostgreSQLDatabaseManager: Алгоритм ID {original_algorithm_id} успешно дублирован. Новый ID: {new_algorithm_id}")
                     
@@ -925,7 +916,6 @@ class PostgreSQLDatabaseManager:
                     """.format(self=self), (original_algorithm_id,))
                     original_actions_rows = cursor.fetchall()
 
-                    # --- ИСПРАВЛЕНО: Преобразование кортежей в список словарей ---
                     original_actions = []
                     for action_row in original_actions_rows:
                         action_dict = {
@@ -938,18 +928,13 @@ class PostgreSQLDatabaseManager:
                             'report_materials': action_row[6]
                         }
                         original_actions.append(action_dict)
-                    # --- ---
                     
                     actions_duplicated_count = 0
                     for original_action in original_actions:
                         print(f"PostgreSQLDatabaseManager: Дублирование действия ID {original_action['id']}...")
                         
-                        # --- ИЗМЕНЕНО: Формируем данные для нового действия ---
-                        # Не копируем ID оригинального действия
-                        # Привязываем к НОВОМУ алгоритму
-                        # Копируем остальные поля
                         new_action_data = {
-                            'algorithm_id': new_algorithm_id, # <-- ВАЖНО: Новый algorithm_id
+                            'algorithm_id': new_algorithm_id,
                             'description': original_action.get('description', ''),
                             'technical_text': original_action.get('technical_text', ''),
                             'start_offset': original_action.get('start_offset'),
@@ -957,13 +942,14 @@ class PostgreSQLDatabaseManager:
                             'contact_phones': original_action.get('contact_phones'),
                             'report_materials': original_action.get('report_materials')
                         }
-                        # --- ---
                         
-                        # Создаем копию действия в БД
                         new_action_id = self.create_action(new_action_data)
                         if isinstance(new_action_id, int) and new_action_id > 0:
                             print(f"PostgreSQLDatabaseManager: Действие ID {original_action['id']} дублировано как ID {new_action_id} для нового алгоритма {new_algorithm_id}.")
                             actions_duplicated_count += 1
+                            
+                            # 5. Дублируем организации и файлы организаций для нового действия
+                            self._duplicate_action_organizations_and_files(original_action['id'], new_action_id)
                         else:
                             print(f"PostgreSQLDatabaseManager: Не удалось дублировать действие ID {original_action['id']} для алгоритма {new_algorithm_id}.")
                     

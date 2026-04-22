@@ -862,7 +862,7 @@ class SQLiteDatabaseManager:
 
     def duplicate_algorithm(self, original_algorithm_id: int) -> int:
         """
-        Создает копию существующего алгоритма и всех его действий.
+        Создает копию существующего алгоритма и всех его действий, организаций и файлов организаций.
 
         :param original_algorithm_id: ID оригинального алгоритма.
         :return: ID нового алгоритма, если успешно, иначе -1.
@@ -896,9 +896,9 @@ class SQLiteDatabaseManager:
 
             print(f"SQLiteDatabaseManager: Найден оригинальный алгоритм ID {original_algorithm_id}: {original_algorithm['name']}")
 
-            # 2. Формируем данные для нового алгоритма (с пометкой "копия")
+            # 2. Формируем данные для нового алгоритма
             original_name = original_algorithm.get('name', 'Алгоритм')
-            new_name = f"{original_name} (копия)"
+            new_name = f"{original_name}"
             new_algorithm_data = {
                 'name': new_name,
                 'category': original_algorithm['category'],
@@ -938,7 +938,7 @@ class SQLiteDatabaseManager:
 
                     # Формируем данные для нового действия
                     new_action_data = {
-                        'algorithm_id': new_algorithm_id, # <-- ВАЖНО: Новый algorithm_id
+                        'algorithm_id': new_algorithm_id,
                         'description': original_action.get('description', ''),
                         'technical_text': original_action.get('technical_text', ''),
                         'start_offset': original_action.get('start_offset'),
@@ -952,6 +952,9 @@ class SQLiteDatabaseManager:
                     if isinstance(new_action_id, int) and new_action_id > 0:
                         print(f"SQLiteDatabaseManager: Действие ID {original_action['id']} дублировано как ID {new_action_id} для нового алгоритма {new_algorithm_id}.")
                         actions_duplicated_count += 1
+                        
+                        # 5. Дублируем организации и файлы организаций для нового действия
+                        self._duplicate_action_organizations_and_files(original_action['id'], new_action_id)
                     else:
                         print(f"SQLiteDatabaseManager: Не удалось дублировать действие ID {original_action['id']} для алгоритма {new_algorithm_id}.")
 
@@ -1433,7 +1436,7 @@ class SQLiteDatabaseManager:
 
     def duplicate_action(self, original_action_id: int, new_algorithm_id: int = None) -> int:
         """
-        Создает копию существующего действия.
+        Создает копию существующего действия, его организаций и файлов организаций.
         :param original_action_id: ID оригинального действия.
         :param new_algorithm_id: ID алгоритма для новой копии (если None, используется ID оригинального алгоритма).
         :return: ID нового действия, если успешно, иначе -1.
@@ -1457,10 +1460,65 @@ class SQLiteDatabaseManager:
 
         if new_action_id != -1:
             logger.info(f"Действие ID {original_action_id} успешно дублировано. Новый ID: {new_action_id}")
+            # Дублируем организации и файлы организаций для нового действия
+            self._duplicate_action_organizations_and_files(original_action_id, new_action_id)
         else:
             logger.error(f"Ошибка при дублировании действия ID {original_action_id}.")
 
         return new_action_id
+        
+    def _duplicate_action_organizations_and_files(self, original_action_id: int, new_action_id: int) -> None:
+        """
+        Дублирует организации и файлы организаций для действия.
+        :param original_action_id: ID оригинального действия.
+        :param new_action_id: ID нового действия, к которому будут привязаны скопированные организации.
+        """
+        try:
+            # Получаем все организации оригинального действия
+            original_organizations = self.get_organizations_for_action(original_action_id)
+            
+            if not original_organizations:
+                logger.debug(f"У действия ID {original_action_id} нет организаций для дублирования.")
+                return
+            
+            logger.info(f"Дублирование {len(original_organizations)} организаций для действия ID {original_action_id}.")
+            
+            for original_org in original_organizations:
+                # Создаем новую организацию с привязкой к новому действию
+                new_org_data = {
+                    'action_id': new_action_id,
+                    'name': original_org['name'],
+                    'phone': original_org.get('phone'),
+                    'contact_person': original_org.get('contact_person'),
+                    'notes': original_org.get('notes')
+                }
+                
+                new_org_id = self.create_organization(new_org_data)
+                
+                if new_org_id != -1:
+                    logger.debug(f"Организация ID {original_org['id']} дублирована как ID {new_org_id} для действия ID {new_action_id}.")
+                    
+                    # Дублируем файлы организации
+                    original_files = self.get_organization_reference_files(original_org['id'])
+                    
+                    for original_file in original_files:
+                        new_file_id = self.add_organization_reference_file(
+                            org_id=new_org_id,
+                            file_path=original_file['file_path'],
+                            file_type=original_file.get('file_type', 'other')
+                        )
+                        
+                        if new_file_id != -1:
+                            logger.debug(f"Файл организации ID {original_file['id']} дублирован как ID {new_file_id} для организации ID {new_org_id}.")
+                        else:
+                            logger.warning(f"Не удалось дублировать файл организации ID {original_file['id']}.")
+                else:
+                    logger.warning(f"Не удалось дублировать организацию ID {original_org['id']} для действия ID {new_action_id}.")
+                    
+        except Exception as e:
+            logger.error(f"Ошибка при дублировании организаций и файлов для действия ID {original_action_id}: {e}")
+            import traceback
+            traceback.print_exc()
         
     def move_algorithm_up(self, algorithm_id: int) -> bool:
         """
