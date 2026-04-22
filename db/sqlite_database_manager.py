@@ -898,7 +898,7 @@ class SQLiteDatabaseManager:
 
             # 2. Формируем данные для нового алгоритма
             original_name = original_algorithm.get('name', 'Алгоритм')
-            new_name = f"{original_name}"
+            new_name = f"{original_name} (Копия)"
             new_algorithm_data = {
                 'name': new_name,
                 'category': original_algorithm['category'],
@@ -939,7 +939,7 @@ class SQLiteDatabaseManager:
                     # Формируем данные для нового действия
                     new_action_data = {
                         'algorithm_id': new_algorithm_id,
-                        'description': original_action.get('description', ''),
+                        'description': f"{original_action.get('description', '')} (Копия)",
                         'technical_text': original_action.get('technical_text', ''),
                         'start_offset': original_action.get('start_offset'),
                         'end_offset': original_action.get('end_offset'),
@@ -1448,7 +1448,7 @@ class SQLiteDatabaseManager:
 
         new_action_data = {
             'algorithm_id': new_algorithm_id if new_algorithm_id is not None else original_action['algorithm_id'],
-            'description': original_action['description'],
+            'description': f"{original_action['description']} (Копия)",
             'technical_text': original_action.get('technical_text', ''),
             'start_offset': original_action.get('start_offset'),
             'end_offset': original_action.get('end_offset'),
@@ -2102,7 +2102,59 @@ class SQLiteDatabaseManager:
                         calculated_start_time.isoformat() if calculated_start_time else None,
                         calculated_end_time.isoformat() if calculated_end_time else None
                     ))
-                    print(f"SQLiteDatabaseManager: Создан action_execution для действия ID {action['id']} (start: {calculated_start_time}, end: {calculated_end_time}).")
+                    new_action_execution_id = cursor.lastrowid
+                    print(f"SQLiteDatabaseManager: Создан action_execution ID {new_action_execution_id} для действия ID {action['id']} (start: {calculated_start_time}, end: {calculated_end_time}).")
+
+                    # --- НОВОЕ: Заполнить организации и файлы для этого действия ---
+                    original_organizations = cursor.execute(
+                        "SELECT id, name, phone, contact_person, notes FROM organizations WHERE action_id = ? ORDER BY name",
+                        (action['id'],)
+                    ).fetchall()
+                    
+                    for org_row in original_organizations:
+                        org_dict = {
+                            'id': org_row[0],
+                            'name': org_row[1],
+                            'phone': org_row[2],
+                            'contact_person': org_row[3],
+                            'notes': org_row[4]
+                        }
+                        
+                        # Создаем запись в exec_organizations
+                        cursor.execute("""
+                            INSERT INTO exec_organizations (action_execution_id, name, phone, contact_person, notes)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (
+                            new_action_execution_id,
+                            org_dict['name'],
+                            org_dict['phone'],
+                            org_dict['contact_person'],
+                            org_dict['notes']
+                        ))
+                        new_exec_org_id = cursor.lastrowid
+                        print(f"SQLiteDatabaseManager: Создана организация {org_dict['name']} с ID {new_exec_org_id} для action_execution ID {new_action_execution_id}.")
+                        
+                        # Получить и добавить файлы организации
+                        org_files = cursor.execute(
+                            "SELECT id, file_path, file_type FROM organization_files WHERE organization_id = ? ORDER BY file_type, file_path",
+                            (org_dict['id'],)
+                        ).fetchall()
+                        
+                        for file_row in org_files:
+                            cursor.execute("""
+                                INSERT INTO exec_organization_files (exec_organization_id, file_path, file_type)
+                                VALUES (?, ?, ?)
+                            """, (
+                                new_exec_org_id,
+                                file_row[1],  # file_path
+                                file_row[2]   # file_type
+                            ))
+                            new_file_id = cursor.lastrowid
+                            print(f"SQLiteDatabaseManager: Добавлен файл ID {new_file_id} ({file_row[1]}) для организации выполнения ID {new_exec_org_id}.")
+                    
+                    if original_organizations:
+                        print(f"SQLiteDatabaseManager: Обработано {len(original_organizations)} организаций(ы) для действия {action['id']} (всего файлов скопировано).")
+                    # --- ---
                 print(f"SQLiteDatabaseManager: Созданы {len(original_actions)} action_executions для execution ID {new_execution_id}.")
 
                 print(f"SQLiteDatabaseManager: Транзакция завершена успешно. Новый execution ID: {new_execution_id}")
@@ -3449,4 +3501,98 @@ class SQLiteDatabaseManager:
             return False
         except Exception as e:
             logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при удалении организации из выполнения действия: {e}")
+            return False
+
+    # ========================================================================
+    # МЕТОДЫ ДЛЯ РАБОТЫ СО СПРАВОЧНЫМИ ФАЙЛАМИ ОРГАНИЗАЦИЙ (ИСПОЛНЕНИЯ)
+    # ========================================================================
+
+    def get_exec_organization_files(self, exec_org_id: int) -> list:
+        """Получить все справочные файлы организации в рамках выполнения действия."""
+        try:
+            conn = self._get_connection()
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM exec_organization_files WHERE exec_organization_id = ? ORDER BY file_type, file_path;", (exec_org_id,))
+            rows = cursor.fetchall()
+            files = [dict(row) for row in rows]
+            cursor.close()
+            conn.close()
+            logger.info(f"SQLiteDatabaseManager: Получено {len(files)} файлов для организации выполнения ID {exec_org_id}.")
+            return files
+        except sqlite3.Error as e:
+            logger.error(f"SQLiteDatabaseManager: Ошибка при получении файлов для организации выполнения ID {exec_org_id}: {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении файлов для организации выполнения ID {exec_org_id}: {e}")
+            return []
+
+    def add_file_to_exec_organization(self, exec_org_id: int, file_data: dict) -> int:
+        """Добавить справочный файл к организации в рамках выполнения действия. Возвращает ID новой записи или 0 при ошибке."""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO exec_organization_files (exec_organization_id, file_path, file_type) VALUES (?, ?, ?);",
+                (
+                    exec_org_id,
+                    file_data.get('file_path', ''),
+                    file_data.get('file_type', 'other')
+                )
+            )
+            conn.commit()
+            new_id = cursor.lastrowid
+            cursor.close()
+            conn.close()
+            logger.info(f"SQLiteDatabaseManager: Создан файл с ID {new_id} для организации выполнения ID {exec_org_id}.")
+            return new_id
+        except sqlite3.Error as e:
+            logger.error(f"SQLiteDatabaseManager: Ошибка при добавлении файла к организации выполнения ID {exec_org_id}: {e}")
+            return 0
+        except Exception as e:
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при добавлении файла к организации выполнения ID {exec_org_id}: {e}")
+            return 0
+
+    def get_exec_organization_file_by_id(self, file_id: int) -> dict | None:
+        """Получить справочный файл организации выполнения по ID."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM exec_organization_files WHERE id = ?;", (file_id,))
+            row = cursor.fetchone()
+            result = dict(row) if row else None
+            cursor.close()
+            return result
+        except sqlite3.Error as e:
+            logger.error(f"SQLiteDatabaseManager: Ошибка при получении файла по ID {file_id}: {e}")
+            return None
+        except Exception as e:
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при получении файла по ID {file_id}: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+
+    def remove_file_from_exec_organization(self, file_id: int) -> bool:
+        """Удалить справочный файл из организации выполнения действия."""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM exec_organization_files WHERE id = ?;",
+                (file_id,)
+            )
+            conn.commit()
+            affected_rows = cursor.rowcount
+            cursor.close()
+            conn.close()
+            logger.info(f"SQLiteDatabaseManager: Удалено {affected_rows} файлов из организации выполнения.")
+            return affected_rows > 0
+        except sqlite3.Error as e:
+            logger.error(f"SQLiteDatabaseManager: Ошибка при удалении файла из организации выполнения: {e}")
+            return False
+        except Exception as e:
+            logger.exception(f"SQLiteDatabaseManager: Неизвестная ошибка при удалении файла из организации выполнения: {e}")
             return False

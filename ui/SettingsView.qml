@@ -32,9 +32,9 @@ Item {
             TabButton {
                 text: "Алгоритмы"
             }
-            // --- Вкладка 4: Организации ---
+            // --- Вкладка 4: Дополнительно ---
             TabButton {
-                text: "Организации"
+                text: "Дополнительно"
             }
         }
 
@@ -46,11 +46,6 @@ Item {
 
             onCurrentIndexChanged: {
                 console.log("QML SettingsView: Переключение на вкладку", currentIndex)
-                // При переключении на вкладку Организаций загружаем данные
-                if (currentIndex === 3 && organizationsListView) {
-                    console.log("QML SettingsView: Загрузка организаций...")
-                    organizationsListView.loadOrganizations()
-                }
             }
 
             // --- Вкладка 1: Пост (с перенесенными настройками) ---
@@ -836,194 +831,9 @@ Item {
                 }
             }
 
-            // --- Вкладка 4: Организации ---
+            // --- Вкладка 4: Дополнительно (пустая) ---
             Item {
-                id: organizationsTab
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 15
-                    spacing: 10
-
-                    // --- Заголовок ---
-                    Label {
-                        text: "Справочник организаций"
-                        font.pointSize: 14
-                        font.bold: true
-                    }
-
-                    // --- Панель кнопок управления ---
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-
-                        Rectangle {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 36
-                            radius: 8
-                            color: {
-                                if (addOrgBtn.pressed) return "#218c3d"
-                                if (addOrgBtn.hovered) return "#2ecc71"
-                                return "#27ae60"
-                            }
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                            MouseArea {
-                                id: addOrgBtn
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    organizationEditorDialog.resetForAdd()
-                                    organizationEditorDialog.open()
-                                }
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                text: "➕ Добавить"
-                                color: "#ffffff"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-                        }
-                        Rectangle {
-                            Layout.preferredWidth: 130
-                            Layout.preferredHeight: 36
-                            radius: 8
-                            color: {
-                                if (editOrgBtn.pressed) return "#c9951d"
-                                if (editOrgBtn.hovered) return "#f39c12"
-                                return "#f1c40f"
-                            }
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                            opacity: organizationsListView.currentIndex !== -1 ? 1.0 : 0.5
-                            MouseArea {
-                                id: editOrgBtn
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                enabled: organizationsListView.currentIndex !== -1
-                                onClicked: {
-                                    if (organizationsListView.currentIndex !== -1) {
-                                        var orgData = organizationsListView.getOrganizationData(organizationsListView.currentIndex)
-                                        organizationEditorDialog.loadDataForEdit(orgData)
-                                        organizationEditorDialog.open()
-                                    }
-                                }
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                text: "✏️ Редактировать"
-                                color: "#2c3e50"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-                        }
-                        Rectangle {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 36
-                            radius: 8
-                            color: {
-                                if (delOrgBtn.pressed) return "#c0392b"
-                                if (delOrgBtn.hovered) return "#e74c3c"
-                                return "#e8453c"
-                            }
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                            opacity: organizationsListView.currentIndex !== -1 ? 1.0 : 0.5
-                            MouseArea {
-                                id: delOrgBtn
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                enabled: organizationsListView.currentIndex !== -1
-                                onClicked: {
-                                    if (organizationsListView.currentIndex !== -1) {
-                                        var orgData = organizationsListView.getOrganizationData(organizationsListView.currentIndex)
-                                        deleteConfirmationDialog.orgIdToDelete = orgData.id
-                                        deleteConfirmationDialog.orgNameToDelete = orgData.name
-                                        deleteConfirmationDialog.open()
-                                    }
-                                }
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                text: "🗑️ Удалить"
-                                color: "#ffffff"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-                        }
-                        Item { Layout.fillWidth: true }
-                        Rectangle {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 36
-                            radius: 8
-                            color: {
-                                if (refreshOrgBtn.pressed) return "#2980b9"
-                                if (refreshOrgBtn.hovered) return "#3498db"
-                                return "#5dade2"
-                            }
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                            MouseArea {
-                                id: refreshOrgBtn
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: organizationsListView.loadOrganizations()
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                text: "🔄 Обновить"
-                                color: "#ffffff"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-                        }
-                    }
-
-                    // --- Список организаций ---
-                    OrganizationsListView {
-                        id: organizationsListView
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        onOrganizationDoubleClicked: {
-                            var orgData = organizationsListView.getOrganizationData(organizationsListView.currentIndex)
-                            if (orgData) {
-                                organizationEditorDialog.loadDataForEdit(orgData)
-                                organizationEditorDialog.open()
-                            }
-                        }
-                    }
-                }
-
-                // --- Диалог редактирования организации ---
-                OrganizationEditorDialog {
-                    id: organizationEditorDialog
-                    onOrganizationSaved: {
-                        organizationsListView.loadOrganizations()
-                    }
-                }
-
-                // --- Диалог подтверждения удаления ---
-                Dialog {
-                    id: deleteConfirmationDialog
-                    title: "Подтверждение удаления"
-                    standardButtons: Dialog.Yes | Dialog.No
-                    modal: true
-                    property int orgIdToDelete: -1
-                    property string orgNameToDelete: ""
-
-                    Label {
-                        text: "Вы действительно хотите удалить организацию \"" + deleteConfirmationDialog.orgNameToDelete + "\"?"
-                        wrapMode: Text.WordWrap
-                    }
-
-                    onAccepted: {
-                        if (orgIdToDelete > 0) {
-                            appData.deleteOrganization(orgIdToDelete)
-                            organizationsListView.loadOrganizations()
-                        }
-                    }
-                }
+                id: additionalTab
             }
         }
     }

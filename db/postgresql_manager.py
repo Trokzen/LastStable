@@ -895,7 +895,7 @@ class PostgreSQLDatabaseManager:
 
                 # 2. Формируем данные для нового алгоритма
                 original_name = original_algorithm.get('name', 'Алгоритм')
-                new_name = f"{original_name}"
+                new_name = f"{original_name} (Копия)"
                 new_algorithm_data = {
                     'name': new_name,
                     'category': original_algorithm['category'],
@@ -935,7 +935,7 @@ class PostgreSQLDatabaseManager:
                         
                         new_action_data = {
                             'algorithm_id': new_algorithm_id,
-                            'description': original_action.get('description', ''),
+                            'description': f"{original_action.get('description', '')} (Копия)",
                             'technical_text': original_action.get('technical_text', ''),
                             'start_offset': original_action.get('start_offset'),
                             'end_offset': original_action.get('end_offset'),
@@ -1365,7 +1365,7 @@ class PostgreSQLDatabaseManager:
 
         new_action_data = {
             'algorithm_id': new_algorithm_id if new_algorithm_id is not None else original_action['algorithm_id'],
-            'description': original_action['description'],
+            'description': f"{original_action['description']} (Копия)",
             'technical_text': original_action.get('technical_text', ''),
             'start_offset': original_action.get('start_offset'),
             'end_offset': original_action.get('end_offset'),
