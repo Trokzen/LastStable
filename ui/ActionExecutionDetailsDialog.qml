@@ -316,6 +316,17 @@ Popup {
         infoDialog.open()
     }
 
+    function openOrganizationDetailsDialog(orgData) {
+        if (!orgData) return;
+        
+        orgNameDialog.currentOrgData = orgData;
+        orgNameDialogLabel.text = orgData.name || "Без названия";
+        contactPersonLabel.text = orgData.contact_person || "—";
+        notesLabel.text = orgData.notes || "—";
+        
+        orgNameDialog.open();
+    }
+
     // Фон
     background: Rectangle {
         id: dialogBackground
@@ -997,8 +1008,7 @@ Popup {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     console.log("QML: Клик по организации:", orgDelegate.orgNameValue);
-                                    orgNameDialogLabel.text = orgDelegate.orgNameValue;
-                                    orgNameDialog.open();
+                                    openOrganizationDetailsDialog(modelData);
                                 }
                             }
 
@@ -1030,8 +1040,7 @@ Popup {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             console.log("QML: Клик по названию организации:", orgName.text);
-                                            orgNameDialogLabel.text = orgName.text;
-                                            orgNameDialog.open();
+                                            openOrganizationDetailsDialog(modelData);
                                         }
                                     }
                                 }
@@ -1328,22 +1337,113 @@ Popup {
         }
     }
 
-    // --- Диалог полного названия организации ---
+    // --- Диалог сведений об организации ---
     Dialog {
         id: orgNameDialog
-        title: "Название организации"
+        title: "Сведения об организации"
         modal: true
-        width: 500
-        height: 150
+        width: 600
+        height: 280
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
 
-        Label {
-            id: orgNameDialogLabel
-            text: ""
-            font.pixelSize: 14
-            wrapMode: Text.Wrap
-            Layout.fillWidth: true
+        property var currentOrgData: null
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 15
+
+            // Название организации
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label {
+                    text: "Название:"
+                    font.pixelSize: 12
+                    color: "#666"
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.max(40, orgNameDialogLabel.implicitHeight + 10)
+                    radius: 8
+                    color: "#f8f9fa"
+                    border.color: "#dee2e6"
+                    border.width: 1
+
+                    Label {
+                        id: orgNameDialogLabel
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: ""
+                        font.pixelSize: 14
+                        font.bold: true
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+
+            // Контактное лицо
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label {
+                    text: "Контактное лицо:"
+                    font.pixelSize: 12
+                    color: "#666"
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.max(40, contactPersonLabel.implicitHeight + 10)
+                    radius: 8
+                    color: "#f8f9fa"
+                    border.color: "#dee2e6"
+                    border.width: 1
+
+                    Label {
+                        id: contactPersonLabel
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: ""
+                        font.pixelSize: 14
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+
+            // Примечания
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 5
+
+                Label {
+                    text: "Примечания:"
+                    font.pixelSize: 12
+                    color: "#666"
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: 8
+                    color: "#f8f9fa"
+                    border.color: "#dee2e6"
+                    border.width: 1
+
+                    Label {
+                        id: notesLabel
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: ""
+                        font.pixelSize: 14
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
         }
 
         footer: Item {
